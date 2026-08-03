@@ -22,11 +22,62 @@ export function getEmailTransporter() {
 }
 
 /**
+ * Strips out bot internal price, balance, and payment metadata lines from item strings.
+ * Extracts clean activation URLs (e.g., https://one.google.com/activate-plan/...)
+ */
+export function extractCleanLinksOrText(rawItems: string[]): string[] {
+  const cleaned: string[] = [];
+
+  rawItems.forEach((item) => {
+    if (!item) return;
+
+    // Search for URL inside item text
+    const urlMatches = item.match(/https?:\/\/[^\s\n<"']+/gi);
+    if (urlMatches && urlMatches.length > 0) {
+      urlMatches.forEach((url) => {
+        // Clean trailing punctuation or parentheses
+        const cleanUrl = url.replace(/[).,]+$/, '').trim();
+        if (cleanUrl && !cleaned.includes(cleanUrl)) {
+          cleaned.push(cleanUrl);
+        }
+      });
+    } else {
+      // Filter out internal bot lines (Price, Total, Balance left, PAYMENT DETAIL, etc.)
+      const sanitizedLines = item
+        .split('\n')
+        .map((l) => l.trim())
+        .filter((line) => {
+          if (!line) return false;
+          if (/PURCHASE SUCCESSFUL/i.test(line)) return false;
+          if (/PAYMENT DETAIL/i.test(line)) return false;
+          if (/Price:/i.test(line)) return false;
+          if (/Total:/i.test(line)) return false;
+          if (/Balance left:/i.test(line)) return false;
+          if (/BUY:/i.test(line)) return false;
+          if (/Order:\s*ORD/i.test(line)) return false;
+          if (/Thank you for your purchase/i.test(line)) return false;
+          if (/ITEMS/i.test(line)) return false;
+          return true;
+        });
+
+      const cleanedText = sanitizedLines.join('\n').trim();
+      if (cleanedText && !cleaned.includes(cleanedText)) {
+        cleaned.push(cleanedText);
+      }
+    }
+  });
+
+  return cleaned.length > 0 ? cleaned : rawItems;
+}
+
+/**
  * Generates HTML email content for order activation
+ * Strictly excludes any price / total amount information
  */
 export function buildActivationEmailHtml(order: CustomerOrder): string {
   const senderEmail = process.env.ADMIN_EMAIL || 'fz.concern@gmail.com';
-  const items = order.items && order.items.length > 0 ? order.items : ['Contact support for activation link'];
+  const rawItems = order.items && order.items.length > 0 ? order.items : ['Contact support for activation link'];
+  const items = extractCleanLinksOrText(rawItems);
 
   const itemsHtml = items
     .map((item, idx) => {
@@ -35,7 +86,7 @@ export function buildActivationEmailHtml(order: CustomerOrder): string {
         return `
           <div style="background-color: #1c1612; border: 1px solid #d4af37; border-radius: 12px; padding: 20px; margin-bottom: 16px; text-align: center;">
             <p style="color: #eadfcf; font-size: 14px; margin-top: 0; margin-bottom: 10px; font-weight: 600;">
-              Activation Link #${idx + 1}
+              Activation Link ${items.length > 1 ? `#${idx + 1}` : ''}
             </p>
             <a href="${item}" target="_blank" style="display: inline-block; background: linear-gradient(135deg, #d4af37 0%, #b28e28 100%); color: #1c1612; font-weight: 700; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-size: 16px; box-shadow: 0 4px 15px rgba(212, 175, 55, 0.3);">
               🚀 Click Here to Redeem & Activate
@@ -49,9 +100,9 @@ export function buildActivationEmailHtml(order: CustomerOrder): string {
         return `
           <div style="background-color: #1c1612; border: 1px solid #3d3129; border-radius: 10px; padding: 16px; margin-bottom: 14px;">
             <p style="color: #d4af37; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; margin-top: 0; font-weight: bold;">
-              Item / Key #${idx + 1}
+              Activation Detail ${items.length > 1 ? `#${idx + 1}` : ''}
             </p>
-            <div style="font-family: monospace; font-size: 15px; color: #FAF8F5; background: #120e0b; padding: 12px; border-radius: 6px; border: 1px dashed #5c4a3e; word-break: break-all;">
+            <div style="font-family: monospace; font-size: 15px; color: #FAF8F5; background: #120e0b; padding: 12px; border-radius: 6px; border: 1px dashed #5c4a3e; word-break: break-all; white-space: pre-wrap;">
               ${item}
             </div>
           </div>
@@ -90,14 +141,14 @@ export function buildActivationEmailHtml(order: CustomerOrder): string {
             <td style="padding: 32px 30px;">
               <div style="background: rgba(212, 175, 55, 0.1); border-left: 4px solid #d4af37; border-radius: 4px; padding: 16px; margin-bottom: 24px;">
                 <h2 style="margin: 0 0 6px 0; color: #d4af37; font-size: 18px;">
-                  🎉 Payment Approved & Order Activated!
+                  🎉 Order Approved & Activated!
                 </h2>
                 <p style="margin: 0; color: #eadfcf; font-size: 14px; line-height: 1.5;">
-                  Your payment has been verified by the administrator. Your access details and activation links are ready below.
+                  Your subscription order has been approved. Your access details and activation links are ready below.
                 </p>
               </div>
 
-              <!-- Order Summary Box -->
+              <!-- Order Summary Box (NO PRICES SHOWN) -->
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #2a211b; border: 1px solid #3d3129; border-radius: 10px; padding: 18px; margin-bottom: 24px;">
                 <tr>
                   <td>
@@ -116,10 +167,6 @@ export function buildActivationEmailHtml(order: CustomerOrder): string {
                       <tr>
                         <td style="color: #b89874;">Quantity:</td>
                         <td align="right" style="font-weight: 600;">${order.quantity}</td>
-                      </tr>
-                      <tr>
-                        <td style="color: #b89874;">Total Amount:</td>
-                        <td align="right" style="font-weight: 600;">₨${order.totalAmount.toLocaleString()} PKR</td>
                       </tr>
                     </table>
                   </td>

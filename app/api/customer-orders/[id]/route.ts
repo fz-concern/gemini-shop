@@ -1,0 +1,130 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { connectToDatabase, readLocalJson, writeLocalJson } from '@/lib/db';
+import { isAuthorizedAdmin } from '@/lib/auth';
+import { CustomerOrder } from '@/lib/types';
+
+const BOT_BASE_URL = 'https://teleshopbot.com/api/gemini-18months-links-shop/bots/6a0f0aaae2a8b6c3616d1a8b/v1';
+const API_KEY = process.env.TELESHOPBOT_API_KEY || '';
+
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    if (!isAuthorizedAdmin(req)) {
+      return NextResponse.json({ success: false, error: 'Unauthorized admin access' }, { status: 401 });
+    }
+
+    const { id } = await params;
+    const body = await req.json();
+    const { action, rejectionReason } = body;
+
+    const { db } = await connectToDatabase();
+
+    let targetOrder: CustomerOrder | null = null;
+    let allOrders: CustomerOrder[] = [];
+
+    if (db) {
+      const collection = db.collection<CustomerOrder>('customer_orders');
+      targetOrder = await collection.findOne({ id });
+    } else {
+      allOrders = readLocalJson<CustomerOrder[]>('customer_orders.json', []);
+      targetOrder = allOrders.find((o) => o.id === id) || null;
+    }
+
+    if (!targetOrder) {
+      return NextResponse.json({ success: false, error: 'Customer order not found' }, { status: 404 });
+    }
+
+    // REJECT ORDER
+    if (action === 'reject') {
+      targetOrder.status = 'rejected';
+      targetOrder.rejectionReason = rejectionReason || 'Payment receipt verification failed.';
+      targetOrder.updatedAt = new Date().toISOString();
+
+      if (db) {
+        const collection = db.collection<CustomerOrder>('customer_orders');
+        await collection.updateOne(
+          { id },
+          { $set: { status: 'rejected', rejectionReason: targetOrder.rejectionReason, updatedAt: targetOrder.updatedAt } }
+        );
+      } else {
+        const idx = allOrders.findIndex((o) => o.id === id);
+        if (idx !== -1) allOrders[idx] = targetOrder;
+        writeLocalJson('customer_orders.json', allOrders);
+      }
+
+      return NextResponse.json({ success: true, message: 'Order rejected', data: targetOrder });
+    }
+
+    // APPROVE ORDER (Can approve pending OR previously rejected orders!)
+    if (action === 'approve') {
+      const botResponse = await fetch(`${BOT_BASE_URL}/orders`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': API_KEY,
+        },
+        body: JSON.stringify({
+          productId: targetOrder.productId,
+          quantity: targetOrder.quantity,
+        }),
+      });
+
+      const botData = await botResponse.json();
+
+      if (!botResponse.ok || !botData.success) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: botData.message || botData.error || 'Failed to place automated order on TeleShopBot API',
+          },
+          { status: botResponse.status || 500 }
+        );
+      }
+
+      const botOrder = botData.data;
+
+      targetOrder.status = 'approved';
+      targetOrder.rejectionReason = undefined; // Clear any previous rejection reason
+      targetOrder.botOrderId = botOrder.id;
+      targetOrder.items = botOrder.items || [];
+      targetOrder.botOrderDetails = botOrder;
+      targetOrder.approvedAt = new Date().toISOString();
+      targetOrder.updatedAt = new Date().toISOString();
+
+      if (db) {
+        const collection = db.collection<CustomerOrder>('customer_orders');
+        await collection.updateOne(
+          { id },
+          {
+            $set: {
+              status: 'approved',
+              rejectionReason: undefined,
+              botOrderId: targetOrder.botOrderId,
+              items: targetOrder.items,
+              botOrderDetails: targetOrder.botOrderDetails,
+              approvedAt: targetOrder.approvedAt,
+              updatedAt: targetOrder.updatedAt,
+            },
+            $unset: { rejectionReason: '' },
+          }
+        );
+      } else {
+        const idx = allOrders.findIndex((o) => o.id === id);
+        if (idx !== -1) allOrders[idx] = targetOrder;
+        writeLocalJson('customer_orders.json', allOrders);
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: 'Order approved and activation link generated successfully!',
+        data: targetOrder,
+      });
+    }
+
+    return NextResponse.json({ success: false, error: 'Invalid action parameter' }, { status: 400 });
+  } catch (error: any) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  }
+}

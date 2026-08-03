@@ -1,0 +1,99 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-cream: #FAF7F2;
+  --bg-surface: #FFFFFF;
+  --bg-warm-card: #F6F0E6;
+  --border-cream: #E6DCCB;
+  --text-dark: #2D2621;
+  --text-muted: #6B5E54;
+  --accent-espresso: #5C4A3E;
+  --accent-gold: #D4AF37;
+}
+
+body {
+  background-color: var(--bg-cream);
+  color: var(--text-dark);
+  font-family: 'Outfit', 'Plus Jakarta Sans', sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(245, 239, 230, 0.8) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(234, 223, 207, 0.5) 0px, transparent 50%);
+  background-attachment: fixed;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #FAF7F2;
+}
+::-webkit-scrollbar-thumb {
+  background: #DECDB8;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #B89874;
+}
+
+.cream-glass {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(230, 220, 203, 0.8);
+}
+
+.cream-card {
+  background: #FFFFFF;
+  border: 1px solid #E8DFD1;
+  box-shadow: 0 4px 20px -2px rgba(92, 74, 62, 0.05), 0 2px 6px -1px rgba(92, 74, 62, 0.03);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.cream-card:hover {
+  box-shadow: 0 12px 30px -4px rgba(92, 74, 62, 0.12), 0 4px 12px -2px rgba(92, 74, 62, 0.06);
+  transform: translateY(-2px);
+}
+
+.gold-gradient-text {
+  background: linear-gradient(135deg, #7A5835 0%, #D4AF37 50%, #9A6A38 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #3D3129 0%, #2A211B 100%);
+  color: #FAF8F5;
+  box-shadow: 0 4px 14px rgba(42, 33, 27, 0.25);
+  transition: all 0.2s ease;
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg, #5C4A3E 0%, #3D3129 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(42, 33, 27, 0.35);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+.btn-gold {
+  background: linear-gradient(135deg, #D4AF37 0%, #B28E28 100%);
+  color: #FFFFFF;
+  box-shadow: 0 4px 14px rgba(212, 175, 55, 0.3);
+  transition: all 0.2s ease;
+}
+
+.btn-gold:hover {
+  background: linear-gradient(135deg, #E6C875 0%, #D4AF37 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(212, 175, 55, 0.4);
+}

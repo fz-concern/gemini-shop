@@ -74,6 +74,9 @@ export interface CustomerOrder {
   botOrderDetails?: any;
   createdAt: string;
   approvedAt?: string;
+  emailSent?: boolean;
+  emailSentAt?: string;
+  emailError?: string;
   updatedAt?: string;
 }
 

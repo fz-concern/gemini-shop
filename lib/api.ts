@@ -93,6 +93,19 @@ export async function rejectCustomerOrder(id: string, reason?: string): Promise<
   return data.data;
 }
 
+export async function resendActivationEmail(id: string): Promise<CustomerOrder> {
+  const res = await fetch(`/api/customer-orders/${id}/resend-email`, {
+    method: 'POST',
+    headers: getHeaders(),
+    cache: 'no-store',
+  });
+  const data: ApiResponse<CustomerOrder> = await res.json();
+  if (!data.success || !data.data) {
+    throw new Error(data.error || 'Failed to resend email');
+  }
+  return data.data;
+}
+
 export async function fetchBankDetails(): Promise<BankDetails> {
   const res = await fetch('/api/bank-details', { headers: getHeaders(), cache: 'no-store' });
   const data: ApiResponse<BankDetails> = await res.json();

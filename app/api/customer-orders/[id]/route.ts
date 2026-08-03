@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase, readLocalJson, writeLocalJson } from '@/lib/db';
 import { isAuthorizedAdmin } from '@/lib/auth';
 import { CustomerOrder } from '@/lib/types';
+import { sendActivationEmail } from '@/lib/email';
 
 const BOT_BASE_URL = 'https://teleshopbot.com/api/gemini-18months-links-shop/bots/6a0f0aaae2a8b6c3616d1a8b/v1';
 const API_KEY = process.env.TELESHOPBOT_API_KEY || '';
@@ -93,6 +94,17 @@ export async function PATCH(
       targetOrder.approvedAt = new Date().toISOString();
       targetOrder.updatedAt = new Date().toISOString();
 
+      // Trigger activation email delivery to user's email address
+      const emailResult = await sendActivationEmail(targetOrder);
+      if (emailResult.success) {
+        targetOrder.emailSent = true;
+        targetOrder.emailSentAt = new Date().toISOString();
+        targetOrder.emailError = undefined;
+      } else {
+        targetOrder.emailSent = false;
+        targetOrder.emailError = emailResult.error;
+      }
+
       if (db) {
         const collection = db.collection<CustomerOrder>('customer_orders');
         await collection.updateOne(
@@ -105,6 +117,9 @@ export async function PATCH(
               items: targetOrder.items,
               botOrderDetails: targetOrder.botOrderDetails,
               approvedAt: targetOrder.approvedAt,
+              emailSent: targetOrder.emailSent,
+              emailSentAt: targetOrder.emailSentAt,
+              emailError: targetOrder.emailError,
               updatedAt: targetOrder.updatedAt,
             },
             $unset: { rejectionReason: '' },
@@ -118,7 +133,11 @@ export async function PATCH(
 
       return NextResponse.json({
         success: true,
-        message: 'Order approved and activation link generated successfully!',
+        message: targetOrder.emailSent
+          ? 'Order approved and activation email sent to customer successfully!'
+          : 'Order approved and activation link generated! (Note: Email delivery pending SMTP config)',
+        emailSent: targetOrder.emailSent,
+        emailError: targetOrder.emailError,
         data: targetOrder,
       });
     }

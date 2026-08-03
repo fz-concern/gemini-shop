@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { CustomerOrder, AccountInfo, BankDetails, Product } from '@/lib/types';
-import { fetchCustomerOrders, approveCustomerOrder, rejectCustomerOrder, fetchAccountInfo, fetchBankDetails, saveBankDetails, fetchProducts, updateProductPricing, adminLogin } from '@/lib/api';
+import { fetchCustomerOrders, approveCustomerOrder, rejectCustomerOrder, resendActivationEmail, fetchAccountInfo, fetchBankDetails, saveBankDetails, fetchProducts, updateProductPricing, adminLogin } from '@/lib/api';
 import { cleanHtmlText, formatCurrency, formatDate } from '@/lib/utils';
 import { ShieldCheck, CheckCircle2, XCircle, Clock, Wallet, UserCheck, Key, Building2, Save, RefreshCw, Eye, MessageSquare, Mail, Lock, LogOut, DollarSign, TrendingUp, Sparkles, CircleDollarSign, History, Check, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
@@ -171,6 +171,19 @@ export default function AdminPage() {
       showToast(`Order #${updatedOrder.orderCode} rejected.`, 'success');
     } catch (err: any) {
       showToast(err.message || 'Rejection failed', 'error');
+    } finally {
+      setProcessingOrderId(null);
+    }
+  };
+
+  const handleResendEmail = async (orderId: string) => {
+    setProcessingOrderId(orderId);
+    try {
+      const updatedOrder = await resendActivationEmail(orderId);
+      setOrders((prev) => prev.map((o) => (o.id === orderId ? updatedOrder : o)));
+      showToast(`Activation email sent successfully to ${updatedOrder.emailAddress || updatedOrder.contactValue}!`, 'success');
+    } catch (err: any) {
+      showToast(err.message || 'Failed to send activation email', 'error');
     } finally {
       setProcessingOrderId(null);
     }
@@ -615,8 +628,22 @@ export default function AdminPage() {
 
                     {/* Delivered Links if Approved */}
                     {isApproved && order.items && order.items.length > 0 && (
-                      <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 space-y-2 text-xs">
-                        <p className="text-[10px] uppercase font-extrabold text-emerald-800">Delivered Activation Items</p>
+                      <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 space-y-3 text-xs">
+                        <div className="flex items-center justify-between">
+                          <p className="text-[10px] uppercase font-extrabold text-emerald-800">Delivered Activation Items</p>
+                          <div className="flex items-center gap-1">
+                            {order.emailSent ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-200">
+                                <Mail className="w-3 h-3" /> Email Sent (fz.concern@gmail.com)
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-200">
+                                <Mail className="w-3 h-3" /> Email Pending
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
                         {order.items.map((item, idx) => (
                           <div key={idx} className="flex items-center justify-between bg-white p-2 rounded-xl border border-emerald-200 font-mono text-[11px]">
                             <span className="truncate max-w-xs">{item}</span>
@@ -628,6 +655,22 @@ export default function AdminPage() {
                             </button>
                           </div>
                         ))}
+
+                        {(order.emailAddress || order.contactValue) && (
+                          <div className="pt-2 border-t border-emerald-200/60 flex items-center justify-between">
+                            <span className="text-[11px] text-espresso-700 font-medium truncate max-w-[200px]">
+                              To: <strong className="text-espresso-900">{order.emailAddress || order.contactValue}</strong>
+                            </span>
+                            <button
+                              disabled={processingOrderId === order.id}
+                              onClick={() => handleResendEmail(order.id)}
+                              className="px-3 py-1 rounded-xl bg-white hover:bg-cream-100 border border-emerald-300 text-espresso-900 font-extrabold text-[11px] flex items-center gap-1.5 shadow-sm transition-all"
+                            >
+                              <Mail className="w-3.5 h-3.5 text-gold-600" />
+                              {processingOrderId === order.id ? 'Sending...' : 'Resend Email'}
+                            </button>
+                          </div>
+                        )}
                       </div>
                     )}
 

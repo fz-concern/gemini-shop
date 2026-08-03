@@ -3,6 +3,7 @@ import { connectToDatabase, readLocalJson, writeLocalJson } from '@/lib/db';
 import { isAuthorizedAdmin } from '@/lib/auth';
 import { CustomerOrder } from '@/lib/types';
 import { sendActivationEmail } from '@/lib/email';
+import { withdrawUsdtFromBinance } from '@/lib/binance';
 
 const BOT_BASE_URL = 'https://teleshopbot.com/api/gemini-18months-links-shop/bots/6a0f0aaae2a8b6c3616d1a8b/v1';
 const API_KEY = process.env.TELESHOPBOT_API_KEY || '';
@@ -60,7 +61,7 @@ export async function PATCH(
 
     // APPROVE ORDER (Can approve pending OR previously rejected orders!)
     if (action === 'approve') {
-      const botResponse = await fetch(`${BOT_BASE_URL}/orders`, {
+      let botResponse = await fetch(`${BOT_BASE_URL}/orders`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -72,7 +73,41 @@ export async function PATCH(
         }),
       });
 
-      const botData = await botResponse.json();
+      let botData = await botResponse.json();
+
+      // If TeleShopBot balance is low, trigger automatic Binance USDT payment!
+      if (!botResponse.ok || !botData.success) {
+        const errorMsg = (botData.message || botData.error || '').toLowerCase();
+        if (errorMsg.includes('balance') || errorMsg.includes('insufficient')) {
+          console.log('[Auto-Payment] TeleShopBot balance low. Attempting automatic Binance USDT transfer...');
+          const binancePayment = await withdrawUsdtFromBinance(1.0 * targetOrder.quantity, '835340307');
+
+          if (!binancePayment.success) {
+            return NextResponse.json(
+              {
+                success: false,
+                error: `TeleShopBot Balance Low. Automatic Binance Payment Failed: ${binancePayment.error}`,
+              },
+              { status: 400 }
+            );
+          }
+
+          // Retry bot order after short delay
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          botResponse = await fetch(`${BOT_BASE_URL}/orders`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-API-Key': API_KEY,
+            },
+            body: JSON.stringify({
+              productId: targetOrder.productId,
+              quantity: targetOrder.quantity,
+            }),
+          });
+          botData = await botResponse.json();
+        }
+      }
 
       if (!botResponse.ok || !botData.success) {
         return NextResponse.json(

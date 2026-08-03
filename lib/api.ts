@@ -65,11 +65,11 @@ export async function fetchCustomerOrders(search?: string): Promise<CustomerOrde
   return data.data || [];
 }
 
-export async function approveCustomerOrder(id: string): Promise<CustomerOrder> {
+export async function approveCustomerOrder(id: string, customLink?: string): Promise<CustomerOrder> {
   const res = await fetch(`/api/customer-orders/${id}`, {
     method: 'PATCH',
     headers: getHeaders(),
-    body: JSON.stringify({ action: 'approve' }),
+    body: JSON.stringify({ action: 'approve', customLink }),
     cache: 'no-store',
   });
   const data: ApiResponse<CustomerOrder> = await res.json();

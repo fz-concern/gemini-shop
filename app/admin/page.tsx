@@ -160,6 +160,23 @@ export default function AdminPage() {
     }
   };
 
+  const handleApproveWithCustomLink = async (orderId: string) => {
+    const customLink = prompt('Paste activation link or code to deliver to customer:');
+    if (!customLink || !customLink.trim()) return;
+
+    setProcessingOrderId(orderId);
+    try {
+      const updatedOrder = await approveCustomerOrder(orderId, customLink.trim());
+      setOrders((prev) => prev.map((o) => (o.id === orderId ? updatedOrder : o)));
+      showToast(`Order #${updatedOrder.orderCode} approved & activation link sent to customer!`, 'success');
+      fetchAccountInfo().then((acc) => setAccountInfo(acc));
+    } catch (err: any) {
+      showToast(err.message || 'Approval failed', 'error');
+    } finally {
+      setProcessingOrderId(null);
+    }
+  };
+
   const handleReject = async (orderId: string) => {
     const reason = prompt('Enter rejection reason for customer:', 'Payment receipt could not be verified.');
     if (reason === null) return;
@@ -681,22 +698,35 @@ export default function AdminPage() {
                       </div>
                     )}
 
-                    {/* Action Buttons (Supports Re-Approving Previously Rejected Orders!) */}
-                    <div className="flex gap-3 pt-2 border-t border-cream-200">
+                    {/* Action Buttons (Supports Re-Approving & Custom Manual Link Delivery!) */}
+                    <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t border-cream-200">
                       {!isApproved && (
                         <button
                           disabled={processingOrderId === order.id}
                           onClick={() => handleApprove(order.id)}
-                          className="w-full py-3 px-4 rounded-2xl btn-gold text-xs font-extrabold flex items-center justify-center gap-1.5 shadow-cream-md"
+                          className="flex-1 py-3 px-3 rounded-2xl btn-gold text-xs font-extrabold flex items-center justify-center gap-1.5 shadow-cream-md"
+                          title="Auto-buy from bot and email customer"
                         >
                           {processingOrderId === order.id ? (
                             <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                           ) : (
                             <>
                               <CheckCircle2 className="w-4 h-4 text-white" />
-                              <span>{isRejected ? 'Re-Approve & Deliver Link' : 'Approve & Deliver Link'}</span>
+                              <span>{isRejected ? 'Auto Re-Approve' : 'Auto Approve & Deliver'}</span>
                             </>
                           )}
+                        </button>
+                      )}
+
+                      {!isApproved && (
+                        <button
+                          disabled={processingOrderId === order.id}
+                          onClick={() => handleApproveWithCustomLink(order.id)}
+                          className="flex-1 py-3 px-3 rounded-2xl bg-espresso-800 hover:bg-espresso-900 text-gold-400 font-extrabold text-xs flex items-center justify-center gap-1.5 transition-colors border border-espresso-700 shadow-sm"
+                          title="Manually paste activation link and send to customer email"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5 text-gold-400" />
+                          <span>Paste Link & Approve</span>
                         </button>
                       )}
 
